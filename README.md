@@ -15,3 +15,4 @@ When everything looks okey, we continue development.
 - Some device infos dont show wanted value, exsample two display or, inner GPU and outer GPU.
 - FPS mesure is ligthweigth, so accurity is not best yet. But we can increase accursy.
 - In some cases reading bios values can cause problems, like gray display. This happend only when programs freezys.
+- Web pages, over do in mobile.
