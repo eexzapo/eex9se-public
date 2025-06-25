@@ -8,6 +8,13 @@ Websites
 
 # Info
 
+# Some updates 25.6.2025 - Profe of concept continue
+- Create new program for overleys
+  Notes: Only tested for PUBG and neet to bee bordelles mode. CS2 and Doom quick test dont work, but i think its because game settings.
+  -> Some proplems GPU and CPU -> Its debens how many cores CPU has. GPU also can stop mesure if instance of graphic card changes.
+- Update Game analyser -> Better FPS
+- Updates websites, some problems on site mappings and google searchs.
+
 # Version 1.0 - 15.5.2025 - Profe of concept
 - POC, we test that everything works. Installers, programs, websites, domain, downloads.
 When everything looks okey, we continue development.
