@@ -1,7 +1,4 @@
-﻿# [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
-# $OutputEncoding = [System.Text.UTF8Encoding]::new()
-
-Set-StrictMode -Version Latest
+﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 # Tarkistetaan järjestelmä
