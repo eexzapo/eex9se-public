@@ -1,4 +1,4 @@
-<#
+﻿<#
 Copyright (c) 2026 eex9se
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -20,6 +20,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 -- eex9se.com --
 #>
+
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+$OutputEncoding = [System.Text.UTF8Encoding]::new()
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -57,41 +60,62 @@ function Get-GamingRegistryInfo {
         )
 
         $value = "Ei loydy"
-        try {
-            $p = Get-ItemProperty -Path $Path -Name $Name -ErrorAction Stop
-            $raw = $p.$Name
-            if ($null -ne $Format) {
-                $value = & $Format $raw
-            } else {
-                $value = $raw
-            }
-        } catch {
-            # jatetaan "Ei loydy"
-        }
+		try {
+			$p = Get-ItemProperty -Path $Path -Name $Name -ErrorAction Stop
+			$raw = $p.$Name
 
-        $results.Add([pscustomobject]@{
-            Ominaisuus = $Ominaisuus
-            Arvo       = $value
-            Suositus   = $Suositus
-            Selite     = $Selite
-        })
+			if ($null -eq $raw -or ($raw -is [string] -and [string]::IsNullOrWhiteSpace($raw))) {
+				$value = "<empty>"
+			}
+			elseif ($null -ne $Format) {
+				$value = & $Format $raw
+			}
+			else {
+				$value = $raw
+			}
+		} catch {
+			$value = "Ei löydy"
+		}
+
+		$results.Add([pscustomobject]@{
+			IsHeader  = $false
+			Ominaisuus = $Ominaisuus
+			Arvo       = $value
+			Suositus   = $Suositus
+			Selite     = $Selite
+			Path       = "$Path\$Name"
+		})
     }
 
     function Add-Row {
         param([string]$Ominaisuus,[object]$Arvo,[string]$Suositus,[string]$Selite)
-        $results.Add([pscustomobject]@{
-            Ominaisuus = $Ominaisuus
-            Arvo       = $Arvo
-            Suositus   = $Suositus
-            Selite     = $Selite
-        })
+
+		$results.Add([pscustomobject]@{
+			IsHeader  = $false
+			Ominaisuus = $Ominaisuus
+			Arvo       = $Arvo
+			Suositus   = $Suositus
+			Selite     = $Selite
+		})
     }
 
+	function Add-Header {
+		param([string]$Title)
+		$results.Add([pscustomobject]@{
+			IsHeader  = $true
+			Ominaisuus = $Title
+			Arvo       = "----"
+			Suositus   = "----"
+			Selite     = "----"
+		})
+	}
     # ==========================================================
     # GAME MODE / GAME BAR / DVR
     # ==========================================================
 
     # 1) Game Mode
+	Add-Header "GAME MODE"
+	
     Add-RegRow `
         -Ominaisuus "Windows Game Mode" `
         -Path "HKCU:\Software\Microsoft\GameBar" `
@@ -100,14 +124,27 @@ function Get-GamingRegistryInfo {
         -Selite "Game Mode paalla. Voi vahentaa taustakuormaa pelissa."
 
     # 2) Xbox Game Bar (overlay)
+	Add-Header "XBOX GAME BAR (overlay)"
+	
     Add-RegRow `
         -Ominaisuus "Xbox Game Bar (overlay)" `
         -Path "HKCU:\Software\Microsoft\GameBar" `
         -Name "ShowStartupPanel" `
         -Suositus "0" `
         -Selite "Jos et kayta Game Baria, overlay pois voi vahentaa hairioita."
+		
+	# 2b) Game Bar syvä disablointi / Nexus
+	
+	Add-RegRow `
+		-Ominaisuus "GameBar Nexus (UseNexusForGameBarEnabled)" `
+		-Path "HKCU:\Software\Microsoft\GameBar" `
+		-Name "UseNexusForGameBarEnabled" `
+		-Suositus "0" `
+		-Selite "Syvempi Game Bar -kytkin joissain buildeissa. 0 = pois (jos et käytä Game Baria)."
 
     # 3) Game DVR
+	Add-Header "Game DVR"
+	
     Add-RegRow `
         -Ominaisuus "Game DVR -Enabled (GameConfigStore)" `
         -Path "HKCU:\System\GameConfigStore" `
@@ -128,11 +165,19 @@ function Get-GamingRegistryInfo {
         -Name "GameDVR_FSEBehaviorMode" `
         -Suositus "2 (vaihtelee)" `
         -Selite "Fullscreen optimizations -kaytos. Arvot vaihtelee buildien mukaan; tarkoitus on vain tarkastella."
-
+	
+	# 3b) Game DVR policy (GPO pakotus)
+	Add-RegRow `
+		-Ominaisuus "GameDVR Policy (AllowGameDVR)" `
+		-Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR" `
+		-Name "AllowGameDVR" `
+		-Suositus "0" `
+		-Selite "GPO-tason pakotus: 0 = estä GameDVR kokonaan (hyvä jos haluat varmistaa ettei taustakaappaus aktivoidu)."
     # ==========================================================
     # GPU / GRAFIIKKA
     # ==========================================================
-
+    Add-Header "GPU / GRAPHS"
+	
     # 4) HAGS
     Add-RegRow `
         -Ominaisuus "GPU Scheduling (HAGS) - HwSchMode" `
@@ -149,9 +194,33 @@ function Get-GamingRegistryInfo {
         -Suositus "Ei pakko" `
         -Selite "GPU watchdog -aikakatkaisu. Muuttaminen ei ole FPS-tweak, lahinna vakaus/diagnostiikka."
 
+	# 5b) TdrDdiDelay
+	Add-RegRow `
+		-Ominaisuus "TDR DDI Delay (TdrDdiDelay)" `
+		-Path "HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" `
+		-Name "TdrDdiDelay" `
+		-Suositus "10" `
+		-Selite "Lisäaika TDR-prosessille (stability/diagnostiikka). Ei FPS-tweak, mutta voi vähentää shader-compile resetointeja."
+
+	# 5c) TdrLevel
+	Add-RegRow `
+		-Ominaisuus "TDR Level (TdrLevel)" `
+		-Path "HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" `
+		-Name "TdrLevel" `
+		-Suositus "3" `
+		-Selite "3 = Recover (oletus/suositus). 0 = TDR pois (en suosittele)."
+
+	# 5d) DirectX Shader Cache (GraphicsDrivers)
+	Add-RegRow `
+		-Ominaisuus "DirectX Shader Cache (ShaderCache)" `
+		-Path "HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" `
+		-Name "ShaderCache" `
+		-Suositus "1" `
+		-Selite "0=pois, 1=päällä. Yleensä pidä päällä; poisto/tyhjennys auttaa joskus patchin jälkeen stutteriin."
     # ==========================================================
     # HIIRI
     # ==========================================================
+	Add-Header "MOUSE"
 
     # 6) Mouse acceleration
     Add-RegRow `
@@ -185,6 +254,7 @@ function Get-GamingRegistryInfo {
     # ==========================================================
     # MULTIMEDIA / PELIAJOITUS (SystemProfile)
     # ==========================================================
+	Add-Header "MULTIMEDIA / GAME TIMING (SystemProfile)"
 
     # 9) SystemResponsiveness
     Add-RegRow `
@@ -226,10 +296,33 @@ function Get-GamingRegistryInfo {
         -Suositus "High (tyypillinen)" `
         -Selite "MMCSS Games -ajoituskategoria."
 
+	# 11b) MMCSS Games: SFIO Priority
+	Add-RegRow `
+	  -Ominaisuus "MMCSS Games: SFIO Priority" `
+	  -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" `
+	  -Name "SFIO Priority" `
+	  -Suositus "High" `
+	  -Selite "Storage/File I/O prioriteetti MMCSS Games -taskille."
+
+	# 11c) MMCSS Games: Background Only
+	Add-RegRow `
+	  -Ominaisuus "MMCSS Games: Background Only" `
+	  -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" `
+	  -Name "Background Only" `
+	  -Suositus "0" `
+	  -Selite "0 = vaikuttaa myös foregroundiin (peleille). 1 = vain taustalle."
+
+	# 11d) MMCSS Games: Clock Rate
+	Add-RegRow `
+	  -Ominaisuus "MMCSS Games: Clock Rate" `
+	  -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" `
+	  -Name "Clock Rate" `
+	  -Suositus "10000" `
+	  -Selite "Ajastus/clock rate -parametri (joissain tweak-profiileissa 10000)."
     # ==========================================================
     # CPU-AJOITUS / PRIORITEETTI
     # ==========================================================
-
+    Add-Header "CPU-TIMING / PRIORITY"
     # 12) Win32PrioritySeparation
     Add-RegRow `
         -Ominaisuus "Win32PrioritySeparation" `
@@ -241,7 +334,7 @@ function Get-GamingRegistryInfo {
     # ==========================================================
     # POWER / THROTTLING
     # ==========================================================
-
+    Add-Header "POWER / THROTTLING"
     # 13) Power throttling
     Add-RegRow `
         -Ominaisuus "PowerThrottlingOff" `
@@ -258,10 +351,47 @@ function Get-GamingRegistryInfo {
         -Suositus "1 (jos haluat pois)" `
         -Selite "Taustasovellukset pois voi vahentaa turhaa kuormaa."
 
+	# 14b) NVMe / DISK power settings (PowerSettings visibility)
+	$subDisk = "0012ee47-9041-4b5d-9b77-535fba8b1442"
+
+	Add-RegRow `
+	  -Ominaisuus "NVMe: Primary Idle Timeout (Attributes)" `
+	  -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerSettings\$subDisk\d639518a-e56d-4345-8af2-b9f32fb26109" `
+	  -Name "Attributes" `
+	  -Suositus "2 (yleensä = näkyviin)" `
+	  -Selite "Power Options -asetuksen näkyvyys. Jos haluat näyttää/piilottaa: powercfg -attributes SUB_DISK <GUID> -ATTRIB_SHOW/-ATTRIB_HIDE."
+
+	Add-RegRow `
+	  -Ominaisuus "NVMe: Secondary Idle Timeout (Attributes)" `
+	  -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerSettings\$subDisk\d3d55efd-c1ff-424e-9dc3-441be7833010" `
+	  -Name "Attributes" `
+	  -Suositus "2 (yleensä = näkyviin)" `
+	  -Selite "Sama kuin yllä, toinen idle timeout."
+
+	Add-RegRow `
+	  -Ominaisuus "NVMe: Primary Latency Tolerance (Attributes)" `
+	  -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerSettings\$subDisk\fc95af4d-40e7-4b6d-835a-56d131dbc80e" `
+	  -Name "Attributes" `
+	  -Suositus "2 (yleensä = näkyviin)" `
+	  -Selite "Power state transition latency tolerance (primary)."
+
+	Add-RegRow `
+	  -Ominaisuus "NVMe: Secondary Latency Tolerance (Attributes)" `
+	  -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerSettings\$subDisk\dbc9e238-6de9-49e3-92cd-8c2b4946b472" `
+	  -Name "Attributes" `
+	  -Suositus "2 (yleensä = näkyviin)" `
+	  -Selite "Power state transition latency tolerance (secondary)."
+
+	Add-RegRow `
+	  -Ominaisuus "NVMe: NOPPME (Attributes)" `
+	  -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerSettings\$subDisk\fc7372b6-ab2d-43ee-8797-15e9841f2cca" `
+	  -Name "Attributes" `
+	  -Suositus "2 (yleensä = näkyviin)" `
+	  -Selite "NVMe NOPPME -asetuksen näkyvyys (piilotettu/näkyvä)."
     # ==========================================================
     # VERKKO (tarkastelu)
     # ==========================================================
-
+    Add-Header "NETWORK (tarkastelu)"
     # 15) NDU service
     Add-RegRow `
         -Ominaisuus "NDU Service Start" `
@@ -273,7 +403,7 @@ function Get-GamingRegistryInfo {
     # ==========================================================
     # LISAYKSET (pelikoneen checklist)
     # ==========================================================
-
+    Add-Header "Muut pelikone lisäykset)"
     # 16) Sticky / Filter / Toggle keys
     Add-RegRow `
         -Ominaisuus "StickyKeys (Flags)" `
@@ -422,42 +552,49 @@ Add-Type -AssemblyName PresentationCore
                 <Rectangle Height="1" Fill="#00F2FF" Opacity="0.3" Margin="0,5,0,0"/>
             </StackPanel>
 
-<Grid Grid.Row="2" Margin="25,0,25,0">
-<Viewbox Stretch="Uniform" Opacity="0.1" IsHitTestVisible="False" Panel.ZIndex="10" Margin="40">
-<TextBlock FontFamily="Consolas" Foreground="#00F2FF" TextAlignment="Center" xml:space="preserve">
-eex9se
-</TextBlock>
-</Viewbox>
+			<Grid Grid.Row="2" Margin="25,0,25,0">
+			<Viewbox Stretch="Uniform" Opacity="0.1" IsHitTestVisible="False" Panel.ZIndex="10" Margin="40">
+			<TextBlock FontFamily="Consolas" Foreground="#00F2FF" TextAlignment="Center" xml:space="preserve">
+			eex9se
+			</TextBlock>
+			</Viewbox>
 
-<Border BorderBrush="#00F2FF" BorderThickness="0,1,0,1">
-<DataGrid Name="dgRegistry" AutoGenerateColumns="False"
- Background="Transparent" Foreground="#00F2FF" IsReadOnly="True"
- CanUserAddRows="False" GridLinesVisibility="Horizontal"
- HorizontalGridLinesBrush="#1A00F2FF" FontFamily="Consolas"
- HeadersVisibility="Column"
- ScrollViewer.HorizontalScrollBarVisibility="Auto"
- ScrollViewer.VerticalScrollBarVisibility="Auto">
-<DataGrid.Resources>
-<Style TargetType="DataGridColumnHeader">
-<Setter Property="Background" Value="#101820"/>
-<Setter Property="Foreground" Value="#00F2FF"/>
-<Setter Property="Padding" Value="10"/>
-<Setter Property="BorderThickness" Value="0,0,0,1"/>
-<Setter Property="BorderBrush" Value="#00F2FF"/>
-</Style>
-<Style TargetType="DataGridRow">
-<Setter Property="Background" Value="#CC0D1218"/>
-</Style>
-</DataGrid.Resources>
-<DataGrid.Columns>
-<DataGridTextColumn Header="[ PARAMETER ]" Binding="{Binding Ominaisuus}" Width="250"/>
-<DataGridTextColumn Header="[ CURRENT ]" Binding="{Binding Arvo}" Width="150"/>
-<DataGridTextColumn Header="[ OPTIMAL ]" Binding="{Binding Suositus}" Width="150"/>
-<DataGridTextColumn Header="[ DESCRIPTION ]" Binding="{Binding Selite}" Width="*"/>
-</DataGrid.Columns>
-</DataGrid>
-</Border>
-</Grid>
+			<Border BorderBrush="#00F2FF" BorderThickness="0,1,0,1">
+			<DataGrid Name="dgRegistry" AutoGenerateColumns="False"
+			 Background="Transparent" Foreground="#00F2FF" IsReadOnly="True"
+			 CanUserAddRows="False" GridLinesVisibility="Horizontal"
+			 HorizontalGridLinesBrush="#1A00F2FF" FontFamily="Consolas"
+			 HeadersVisibility="Column"
+			 ScrollViewer.HorizontalScrollBarVisibility="Auto"
+			 ScrollViewer.VerticalScrollBarVisibility="Auto">
+			<DataGrid.Resources>
+			<Style TargetType="DataGridColumnHeader">
+			<Setter Property="Background" Value="#101820"/>
+			<Setter Property="Foreground" Value="#00F2FF"/>
+			<Setter Property="Padding" Value="10"/>
+			<Setter Property="BorderThickness" Value="0,0,0,1"/>
+			<Setter Property="BorderBrush" Value="#00F2FF"/>
+			</Style>
+			<Style TargetType="DataGridRow">
+			  <Setter Property="Background" Value="#CC0D1218"/>
+			  <Style.Triggers>
+				<DataTrigger Binding="{Binding IsHeader}" Value="True">
+				  <Setter Property="Background" Value="#201A2A33"/>
+				  <Setter Property="FontWeight" Value="Bold"/>
+				</DataTrigger>
+			  </Style.Triggers>
+			</Style>
+			</DataGrid.Resources>
+			<DataGrid.Columns>
+				<DataGridTextColumn Header="[ PARAMETER ]" Binding="{Binding Ominaisuus}" Width="250"/>
+				<DataGridTextColumn Header="[ CURRENT ]" Binding="{Binding Arvo}" Width="150"/>
+				<DataGridTextColumn Header="[ OPTIMAL ]" Binding="{Binding Suositus}" Width="150"/>
+				<DataGridTextColumn Header="[ DESCRIPTION ]" Binding="{Binding Selite}" Width="*"/>
+				<DataGridTextColumn Header="[ REGISTRY PATH ]" Binding="{Binding Path}" Width="100"/>
+			</DataGrid.Columns>
+			</DataGrid>
+			</Border>
+			</Grid>
 
             <Grid Grid.Row="3" Margin="25,15,25,20">
                 <TextBlock Text="eex9se CORE_OS_VER: 1.0.0 - SESSION_ACTIVE | Copyright (c) 2026 eex9se"

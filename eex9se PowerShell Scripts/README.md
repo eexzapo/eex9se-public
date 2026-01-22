@@ -8,7 +8,7 @@ Työkalu on **vain tarkasteluun** – se ei muuta järjestelmän asetuksia.
 
 ---
 
-##  Käynnistys suoraan PowerShellistä (ei asennusta)
+## 🔹 Käynnistys suoraan PowerShellistä (ei asennusta)
 
 Avaa PowerShell (Windows PowerShell 5.1 tai uudempi) ja suorita:
 
